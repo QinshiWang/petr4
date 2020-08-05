@@ -374,7 +374,7 @@ module MakeInterpreter (T : Target) = struct
     match s with
     | SContinue ->
       let (st, s', v) = eval_expr env st SContinue rhs in
-      let (st, s'', lv) = lvalue_of_expr env st s lhs in
+      let (st, s'', lv) = lvalue_of_expr true env st s lhs in
       begin match s',s'', lv with
         | SContinue, SContinue, Some lv -> let (st, s) = assign_lvalue st env lv v in env, st, s
         | SContinue, _, _               -> env, st, s''
@@ -607,7 +607,7 @@ module MakeInterpreter (T : Target) = struct
   (* Functions on L-Values*)
   (*----------------------------------------------------------------------------*)
 
-  and lvalue_of_expr (env : env) (st : state) (signal : signal)
+  and lvalue_of_expr (wse : bool) (env : env) (st : state) (signal : signal)
       (expr : Expression.t) : state * signal * lvalue option =
     match signal with
     | SContinue -> begin match (snd expr).expr with
@@ -618,32 +618,33 @@ module MakeInterpreter (T : Target) = struct
       | _ -> st, signal, None end
     | SReject _ | SExit | SReturn _ -> st, signal, None
 
-  and lvalue_of_expr_mem (env : env) (st : state) (typ : Type.t)
+  and lvalue_of_expr_mem (wse : bool) (env : env) (st : state) (typ : Type.t)
       (e : Expression.t) (n : string) : state * signal * lvalue option =
-    let (st', signal, lv) = lvalue_of_expr env st SContinue e in
-    st', signal,
+    let (st', signal, lv) = lvalue_of_expr wse env st SContinue e in
+    (if wse then st' else st), signal,
     lv >>| fun lv -> {lvalue = LMember {expr = lv; name = n}; typ }
 
-  and lvalue_of_expr_bsa (env : env) (st : state) (typ : Type.t)
+  and lvalue_of_expr_bsa (wse : bool) (env : env) (st : state) (typ : Type.t)
       (n : Expression.t) (lsb : Bigint.t)
       (msb : Bigint.t) : state * signal * lvalue option =
-    let (st', signal, lv) = lvalue_of_expr env st SContinue n in
+    let (st', signal, lv) = lvalue_of_expr wse env st SContinue n in
     match signal with
-    | SReject _ | SExit | SReturn _ -> st', signal, lv
+    | SReject _ | SExit | SReturn _ -> (if wse then st' else st), signal, lv
     | SContinue ->
-      st', signal,
+      (if wse then st' else st), signal,
       lv >>| fun lv -> {lvalue = LBitAccess{expr=lv; msb = msb; lsb = lsb}; typ}
 
-  and lvalue_of_expr_ara (env : env) (st : state) (typ : Type.t)
+  and lvalue_of_expr_ara (wse : bool) (env : env) (st : state) (typ : Type.t)
       (a : Expression.t) (idx : Expression.t) : state * signal * lvalue option =
-    let (st', s, lv) = lvalue_of_expr env st SContinue a in
-    let (st'', s', idx') = eval_expr env st' SContinue idx in
+    print_endline "should only get lvalue of array access once";
+    let (st', s, lv) = lvalue_of_expr wse env st SContinue a in
+    let (st'', s', idx') = eval_expr env (if wse then st' else st) SContinue idx in
     match s, s' with
     | SContinue, SContinue ->
-      st'', s',
+      (if wse then st'' else st), s',
       lv >>| fun lv -> {lvalue = LArrayAccess{expr=lv; idx=idx'}; typ }
-    | SContinue, _ -> st'', s', lv
-    | _, _ -> st', s, lv
+    | SContinue, _ -> (if wse then st'' else st), s', lv
+    | _, _ -> (if wse then st' else st), s, lv
 
   (*----------------------------------------------------------------------------*)
   (* Expression Evaluation *)
@@ -814,7 +815,7 @@ module MakeInterpreter (T : Target) = struct
           st', s, find_exn fs (snd name)
         | VParser _ | VControl _ | VTable _ ->
           let name = snd name in
-          let caller = lvalue_of_expr env st' SContinue expr
+          let caller = lvalue_of_expr true env st' SContinue expr
             |> third3
             |> Option.value_exn in
           st', s, VBuiltinFun { name; caller; }
@@ -907,10 +908,10 @@ module MakeInterpreter (T : Target) = struct
       (valid : bool) : state * signal * value =
     match fname with
     | "setValid" | "setInvalid" ->
-      let (_, _, lv) = lvalue_of_expr env st SContinue e in
+      let (_, _, lv) = lvalue_of_expr true env st SContinue e in
       st, SContinue, VBuiltinFun{name=fname;caller=Option.value_exn lv}
     | "isValid" -> begin try
-      let (_, _, lv) = lvalue_of_expr env st SContinue e in
+      let (_, _, lv) = lvalue_of_expr true env st SContinue e in
       st, SContinue, VBuiltinFun{name=fname; caller=Option.value_exn lv}
       with _ -> failwith "TODO: edge case with header isValid()" end
     | _ -> (st, SContinue, T.read_header_field valid fs fname)
@@ -918,7 +919,7 @@ module MakeInterpreter (T : Target) = struct
   and eval_union_mem (env : env) (st : state)
     (fname : string) (e : Expression.t) (fs : (string * value) list)
     : state * signal * value =
-    let (st', signal, lv) = lvalue_of_expr env st SContinue e in
+    let (st', signal, lv) = lvalue_of_expr true env st SContinue e in
     match fname with
     | "isValid" -> begin match signal, lv with
       | SContinue, Some lv -> st', SContinue, VBuiltinFun{name=fname;caller=lv}
@@ -969,7 +970,7 @@ module MakeInterpreter (T : Target) = struct
 
   and eval_stack_builtin (env : env) (st : state) (name : string)
       (e : Expression.t) : state * signal * value =
-    let (st', signal, lv) = lvalue_of_expr env st SContinue e in
+    let (st', signal, lv) = lvalue_of_expr true env st SContinue e in
     st', signal, VBuiltinFun{name; caller = Option.value_exn lv}
 
   (*----------------------------------------------------------------------------*)
