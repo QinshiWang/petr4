@@ -76,18 +76,8 @@ and expr =
   | Error of {
     name : string
   }
-  | FunctionCall of {
-    expr : expr;
-    typ_args : datatype list;
-    args : expr list;
-  }
 
 and ctrl_stmt =
-  | CMethodCall of {
-    expr : expr;
-    typ_args : datatype list;
-    args : expr list;
-  }
   | CAssign of {
     lhs : expr;
     rhs : expr;
@@ -116,11 +106,6 @@ and prsr_stmt =
   | PVarDecl of {
     decl : var_decl
   }
-  | PMethodCall of {
-    expr : expr;
-    typ_args : datatype list;
-    args : expr list;
-  }
   | Select of {
     cases : select;
   }
@@ -137,6 +122,7 @@ and var_decl =
     typ_name : string;
     args : expr list;
     var : string;
+    (* TODO: possible an initialization block *)
   }
 
 and error_decl = string list
@@ -152,7 +138,6 @@ and obj_decl =
   | Table of table_decl
   | Control of control_decl
   | Parser of parser_decl
-  | Function of function_decl
 
 and table_decl = unit (* TODO *)
 
@@ -160,15 +145,14 @@ and control_decl = unit (* TODO *)
 
 and parser_decl = unit (* TODO *)
 
-and function_decl = unit (* TODO *)
-
 and extern_decl = unit (* TODO *)
 
 and program = {
   error : error_decl;
   matchkind : matchkind_decl;
-  typs : typ_decl list;
   externs : extern_decl list;
+  typs : typ_decl list;
+  vars : var_decl list;
   objs : obj_decl list;
   main : ctrl_stmt list;
 }
