@@ -22,7 +22,7 @@ depends: [
   "cstruct-sexp"
   "menhir"
   "ANSITerminal"
-  "core" {>= "0.13.0"}
+  "core_kernel" {>= "0.13.0"}
   "ppx_deriving_yojson"
   "ppx_jane" {>= "0.13.0" }
   "ppx_js_style" {>= "0.13.0" }
